@@ -1,0 +1,30 @@
+GPT 训练与对话系统 (C++ 版)
+
+【启动】
+  双击 gpt_trainer.exe 即可运行，不会弹出命令行窗口。
+  （首次启动需要数秒加载 CUDA 与模型库，请耐心等待）
+
+【功能】
+  - 训练页：选择 token_ids.txt 数据文件、调整训练参数、开始/停止训练
+  - 对话页：加载 saves/modelN 中的模型 + 选择 spm.model 分词器，输入中文生成回复
+  - 打开数据集 (.zip)：自动解压并加载 spm.model / token_ids.txt / config.json
+  - 分词器页：训练 SentencePiece（语料 → spm.model → token_ids.txt → dataset.zip）
+
+【断点续训】
+  - 训练页设「断点保存间隔(步)」（默认 5000，0=关闭）：每 N 步自动保存完整状态
+    （模型权重 + 优化器动量 + 学习率调度 + 步数）到 models/training_state/
+  - 中断/断电后重新启动，勾选「从上次断点继续」再点开始训练，即可无缝续训
+  - 想用已有模型权重继续训练（不恢复优化器）：在「初始权重(可选)」填入
+    saves/modelN/model.pt，训练将从该权重开始、优化器重新初始化
+
+【目录】
+  Release\gpt_trainer.exe   主程序
+  models\                   训练产生的检查点与最终模型
+  logs\                     TensorBoard 日志
+  saves\modelN\             对话页可加载的模型
+
+【注意】
+  - 模型/日志/存档目录位于项目根目录（cpp训练器），与主程序位置无关；
+    如需自定义，可在系统环境变量 GPT_ROOT 中指定项目根目录。
+  - 其他电脑运行本目录需安装 Microsoft Visual C++ 2015-2022 运行库 (x64)。
+  - 需 NVIDIA 显卡（驱动支持 CUDA 13）；无显卡时自动回退 CPU（训练会非常慢）。

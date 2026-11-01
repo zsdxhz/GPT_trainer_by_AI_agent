@@ -145,8 +145,12 @@ Trainer::Trainer(const Config& cfg, TrainerCallbacks callbacks,
 Trainer::~Trainer() = default;
 
 void Trainer::log(const std::string& line) {
+  // 有回调时由调用方决定输出位置（GUI 写日志面板 / CLI 打印），否则直接输出
+  if (cb_.on_log) {
+    cb_.on_log(line);
+    return;
+  }
   std::cout << line << std::endl;
-  if (cb_.on_log) cb_.on_log(line);
 }
 
 // ---------------------------------------------------------------------------

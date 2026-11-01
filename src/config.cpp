@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -26,13 +27,46 @@ namespace fs = std::filesystem;
 namespace gpt {
 
 fs::path Config::project_root() {
-  // 环境变量优先（宽字符读取，支持中文路径）
+  // 1) 环境变量优先（宽字符读取，支持中文路径）
   std::wstring env(1024, L'\0');
   DWORD n = GetEnvironmentVariableW(L"GPT_ROOT", env.data(), (DWORD)env.size());
   if (n > 0 && n < env.size()) {
     env.resize(n);
     if (!env.empty()) return fs::path(env);
   }
+  // 2) exe 同目录的 gpt_root.txt（发布包便携模式）：
+  //    内容 "." 或空 = 根目录就是 exe 所在目录；否则按 UTF-8 路径解释
+  {
+    std::wstring buf(32768, L'\0');
+    const DWORD len = GetModuleFileNameW(nullptr, buf.data(), (DWORD)buf.size());
+    if (len > 0 && len < buf.size()) {
+      buf.resize(len);
+      const fs::path exe_dir = fs::path(buf).parent_path();
+      const fs::path marker = exe_dir / L"gpt_root.txt";
+      std::error_code ec;
+      if (fs::exists(marker, ec)) {
+        std::ifstream f(marker, std::ios::binary);
+        std::string line;
+        std::getline(f, line);
+        // 去掉 UTF-8 BOM / CR / 首尾空白
+        if (line.size() >= 3 && (unsigned char)line[0] == 0xEF &&
+            (unsigned char)line[1] == 0xBB && (unsigned char)line[2] == 0xBF) {
+          line.erase(0, 3);
+        }
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ' ||
+                                 line.back() == '\t')) {
+          line.pop_back();
+        }
+        size_t b = line.find_first_not_of(" \t\r");
+        if (b == std::string::npos) return exe_dir; // 空 = 便携模式
+        line = line.substr(b);
+        if (line == ".") return exe_dir;
+        fs::path p = u8path(line);
+        return p.is_absolute() ? p : (exe_dir / p);
+      }
+    }
+  }
+  // 3) 编译期根目录（开发机默认）
   return u8path(GPT_PROJECT_ROOT);
 }
 

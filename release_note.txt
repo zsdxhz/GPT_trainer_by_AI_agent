@@ -1,30 +1,133 @@
 GPT 训练与对话系统 (C++ 版)
 
+【安装：解压即用（单包，无需安装任何东西）】
+  1. 解压 gpt_trainer_v1.1.0_win64_cu130.zip 到任意文件夹（中英文路径均可）
+  2. 双击其中的 gpt_trainer.exe 运行
+  已内置全部运行环境：VC++ 运行时、Qt、libtorch(CUDA)、llama.cpp 引擎（CUDA+CPU）、
+  中文分词器 spm.model —— 不需要装 VC 运行库、不需要装 llama.cpp/Ollama、不需要联网。
+  可选：把自家/第三方的 .gguf 模型放进 models\gguf\ 即可在对话页选择。
+
 【启动】
   双击 gpt_trainer.exe 即可运行，不会弹出命令行窗口。
   （首次启动需要数秒加载 CUDA 与模型库，请耐心等待）
 
+【界面：Windows 11 系统级 UI】
+  - Windows 11 原生控件风格（Fluent），左侧导航 + 卡片式设置行，与系统「设置」一致
+  - 自动跟随系统浅色 / 深色主题与系统强调色，切换后界面立即同步
+  - 三个页面按使用者层次划分：
+      训练：选数据集 + 4 个常用参数 + 开始/停止 + 进度与日志
+      对话：无边框聊天页（消息区铺满整页，没有卡片边框）+ 底部悬浮圆角输入框
+            · AI 头像 + 纯文本回复、用户右对齐气泡、逐字打印动画
+            · 输入框工具条：新建对话 / 多轮 / 长度 / 温度 / 上下文 / 模型选择 /
+              刷新 / 停止 / 圆形「↑」发送（Ctrl+Enter 亦可发送）
+            · 模型选择即自动加载（无需按「加载」；启动时也会自动加载上次模型）
+            · 右下角圆形环显示上下文用量百分比（悬停看 已用/上限 token）
+            · 输入框下方状态行：本轮 tok · 耗时 · tok/s · 累计 · 轮次
+            · 每条 AI 回复下方同样有一行 ⚡ token 数 · 耗时 · tok/s 小字
+            · 上下文 512~131072、回复长度 1~4096、温度 0.01~2.0 自动钳制，
+              避免误输入极端值拖垮引擎
+      高级：推理引擎 / 采样参数 / GGUF 导出 / 训练高级参数 / 分词器 / 诊断
+   - 侧栏切换页面时左侧强调色指示条带滑动动画；所有下拉列表为圆角卡片样式
+  - 快捷键：F5 开始训练 / Shift+F5 停止训练 / Ctrl+Enter 发送消息
+  - 窗口标题栏跟随主题，保留系统圆角、贴靠布局与动效
+
+【推理引擎：llama.cpp（GPU + CPU 双引擎）】
+  - 对话默认使用 llama.cpp（llama-server）推理，逐字流式输出
+  - 本包内置两个引擎：
+      llama-server.exe            CUDA 版（GPU 加速，60MB）—— 默认使用，自动卸载全部层到显卡
+      llama.cpp\llama-server.exe  CPU 版（9MB 静态）—— 无 NVIDIA 显卡或想省显存时使用
+    程序优先用根目录 CUDA 版；如需强制 CPU：在「高级 → 推理引擎」把 llama-server
+    路径浏览到 llama.cpp\llama-server.exe 即可
+  - 实测：本机 58M 小模型 GPU 250 tok/s / CPU 160 tok/s；换成 0.5B～3B 的 Qwen 后
+    GPU 优势约 5～10 倍
+  - 引擎自动探测：根目录 llama-server.exe → 项目 third_party\llama.cpp
+    → 本目录 llama.cpp\ → 本机 Ollama 自带 → PATH
+  - 模型支持：任意 GGUF（Qwen / Llama / Gemma… 均可），或本项目训练出的模型
+    （加载时会自动导出 models\gguf\modelN.gguf）
+  - 提示词通道（默认自动）：
+      * 本项目训练的模型 → spm token 通道（中文最稳）
+      * Qwen 等 Instruct 模型 → 自动套用模型自带 chat 模板（/v1/chat/completions），
+        一问一答效果最好；失败会自动退回文本通道
+      * 其他 GGUF → 文本补全
+    可在「高级 → 推理引擎 → 提示词通道」手动切换（自动/对话模板/文本/spm token）
+  - 模型放置：把 .gguf 放进本目录 models\gguf\ 即出现在对话页下拉列表；
+    也可在对话页/「高级」页直接浏览任意路径的 .gguf
+  - 中文编码：用本项目自己训练的模型时，程序会按词表大小自动匹配 models\spm.model
+    （已附带）；用外部模型（如 Qwen 的 BPE 词表）时自动改用 llama.cpp 内置分词器
+  - 找不到 llama-server 时自动回退到内置 libtorch 引擎（「高级」页可手动指定引擎）
+  - 导出/验证命令行：
+      gpt_trainer.exe export-gguf --model saves\model3 --out models\gguf\model3.gguf
+      gpt_trainer.exe chat --model models\gguf\model3.gguf --prompt "今天天气"
+  - ⚠ GGUF 与分词器必须词表一致：本项目导出的 GGUF 用中文 SentencePiece，
+    对话时程序会自动在 models\spm.model（及 data\models\spm.model 等）中按词表大小匹配
+    spm.model；匹配不上会自动退回「内置 libtorch 引擎」。
+    本包已附带 model3.gguf（32000 词表）+ 配套 models\spm.model，开箱即可对话。
+
+【命令行（CLI）】
+  不带参数运行 = 图形界面；带命令运行 = 命令行，所有功能都能用参数调用：
+
+    gpt_trainer.exe help                    查看全部命令
+    gpt_trainer.exe <命令> --help           查看某命令的全部选项
+
+    train       训练（--data/--lr/--batch/--seq-len/--epochs/--steps/--stride/
+                --embed/--heads/--layers/--dropout/--weight-decay/--grad-clip/
+                --ckpt-interval/--resume/--init/--cpu/--threads/--vocab）
+    chat        对话或续写（--model/--prompt/--prompt-file/--interactive/
+                --engine auto|llama|builtin/--system/--template/--context/
+                --save-context/--max-tokens/--temperature/--top-k/--top-p/
+                --repeat/--seed/--ctx/--threads/--ngl/--server/--spm/
+                --chat-mode auto|chat|text|tokens）
+    tokenize    分词器训练（--out/--corpus/--threads/--vocab/--sentences + 语料）
+    export-gguf 导出 GGUF（--model/--out/--spm）
+    list        列出训练模型与 GGUF（--json）
+    info        设备/路径/引擎探测（--probe-server/--json）
+    serve       只启动 llama-server（--model/--ctx/--threads/--ngl/--port/--print-only）
+    selftest    互读自检        loadtest  打印任意 state_dict
+
+  任意命令都支持 --json（机器可读输出）与 -q/--quiet（只输出结果）；
+  旧参数 --cli / --selftest / --loadtest / --tokenize / --export-gguf /
+  --llama-chat 仍然兼容。
+
+  示例：
+    gpt_trainer.exe train --epochs 3 --batch 8
+    gpt_trainer.exe chat --model saves/model1 --prompt "今天天气"
+    gpt_trainer.exe chat --model models/gguf/model1.gguf --interactive
+    gpt_trainer.exe export-gguf --model saves/model1
+    gpt_trainer.exe list --json
 【功能】
-  - 训练页：选择 token_ids.txt 数据文件、调整训练参数、开始/停止训练
-  - 对话页：加载 saves/modelN 中的模型 + 选择 spm.model 分词器，输入中文生成回复
-  - 打开数据集 (.zip)：自动解压并加载 spm.model / token_ids.txt / config.json
-  - 分词器页：训练 SentencePiece（语料 → spm.model → token_ids.txt → dataset.zip）
+  - 训练页：token_ids.txt / dataset.zip，学习率、批次大小、序列长度、训练轮数
+  - 对话页：模型下拉（训练模型 + GGUF）、加载、多轮对话、回复长度与温度、停止生成
+  - 高级页：引擎与采样参数、Top-K/Top-P/重复惩罚/随机种子/系统提示词/问答模板、
+            GGUF 导出、训练步数/步长/维度/头数/层数/断点/初始权重、分词器训练与测试、诊断日志
 
 【断点续训】
-  - 训练页设「断点保存间隔(步)」（默认 5000，0=关闭）：每 N 步自动保存完整状态
-    （模型权重 + 优化器动量 + 学习率调度 + 步数）到 models/training_state/
-  - 中断/断电后重新启动，勾选「从上次断点继续」再点开始训练，即可无缝续训
-  - 想用已有模型权重继续训练（不恢复优化器）：在「初始权重(可选)」填入
-    saves/modelN/model.pt，训练将从该权重开始、优化器重新初始化
+  - 「高级」页设「断点保存间隔(步)」（默认 5000，0=关闭）：每 N 步保存完整状态
+    （权重 + 优化器动量 + 学习率调度 + 步数）到 models/training_state/
+  - 中断后重新启动，打开「断点续训」开关再开始训练即可无缝续训
+
+【开箱即用（本包已内置全部运行环境）】
+  - 无需安装 VC++ 运行库：msvcp140 / vcruntime140 等已随包附带（同目录加载）
+  - 无需安装 llama.cpp / Ollama：引擎已内置 llama.cpp\llama-server.exe
+    （官方源码静态 CPU 构建，零 DLL 依赖；双击即能对话）
+  - 无需下载模型：示例模型 models\gguf\model1.gguf 已附带，可直接选它开始对话
+  - 便携模式：gpt_root.txt 内容为 "."，所有数据都在本目录内
+      models\  logs\  saves\  data\  由程序自动创建
+    想改用其他数据目录：把 gpt_root.txt 改成绝对路径；删除该文件则回落到编译期根目录
+  - 想要 GPU 推理：用 llama.cpp 官方 CUDA 版 llama-server.exe 覆盖本目录
+    llama.cpp\llama-server.exe 即可（提速数十倍，仍无需安装任何东西）
 
 【目录】
-  Release\gpt_trainer.exe   主程序
-  models\                   训练产生的检查点与最终模型
-  logs\                     TensorBoard 日志
-  saves\modelN\             对话页可加载的模型
+  Release\gpt_trainer.exe      主程序
+  llama.cpp\llama-server.exe   llama.cpp 推理引擎（对话用）
+  models\                      检查点与最终模型
+  models\gguf\                 导出的 GGUF（llama.cpp 使用，含示例模型）
+  logs\                        TensorBoard 日志
+  saves\modelN\                对话页可加载的模型
+  gpt_root.txt                 便携模式标记（"." = 数据目录就是本目录）
 
 【注意】
-  - 模型/日志/存档目录位于项目根目录（cpp训练器），与主程序位置无关；
-    如需自定义，可在系统环境变量 GPT_ROOT 中指定项目根目录。
+  - 模型/日志/存档目录默认就在本目录（便携模式），拷到任何电脑都一样能用；
+    如需自定义，可在系统环境变量 GPT_ROOT 中指定根目录。
   - 其他电脑运行本目录需安装 Microsoft Visual C++ 2015-2022 运行库 (x64)。
   - 需 NVIDIA 显卡（驱动支持 CUDA 13）；无显卡时自动回退 CPU（训练会非常慢）。
+  - llama.cpp 引擎需要 llama-server.exe；没有时不弹错误，会自动回退内置引擎。

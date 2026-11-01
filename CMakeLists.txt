@@ -11,22 +11,29 @@ endif()
 
 # ---------------------------------------------------------------------------
 # 依赖目录（全部使用绝对路径 / 本地相对路径，不依赖系统 PATH）
-#   libtorch   : 本目录解压出的 libtorch-win-shared-with-deps-2.14.0+cu130
-#   Qt         : aqtinstall 下载到 qt/6.9.3/msvc2022_64
+#   libtorch     : 本目录解压出的 libtorch-win-shared-with-deps-2.14.0+cu130
+#   Qt           : aqtinstall 下载到 qt/6.9.3/msvc2022_64
 #   sentencepiece: 复用 cpp分词器 已构建的静态库
-#   zlib       : 复用 RTX 项目 vcpkg 构建的 z.lib
-# 注意：链接输入使用 E:\cpptrn\* 的 ASCII junction（见 build.ps1 注释），
+#   zlib         : 复用 RTX 项目 vcpkg 构建的 z.lib
+# 注意：链接输入使用 ASCII junction <盘符>:/cpptrn/*（见 build.ps1 注释），
 #   因为 MSVC link.exe 以 ANSI 编码读取 Ninja 的响应文件，中文路径会被破坏。
+#   junction 根目录通过 -DGPT_DEPS_ROOT=... 覆盖，默认取源码所在盘符。
 # ---------------------------------------------------------------------------
-list(PREPEND CMAKE_PREFIX_PATH "E:/cpptrn/libtorch")
+if(NOT DEFINED GPT_DEPS_ROOT)
+  string(SUBSTRING "${CMAKE_CURRENT_SOURCE_DIR}" 0 2 _src_drive)
+  set(GPT_DEPS_ROOT "${_src_drive}/cpptrn")
+endif()
+message(STATUS "GPT_DEPS_ROOT = ${GPT_DEPS_ROOT}")
+
+list(PREPEND CMAKE_PREFIX_PATH "${GPT_DEPS_ROOT}/libtorch")
 find_package(Torch REQUIRED)
 
-list(PREPEND CMAKE_PREFIX_PATH "E:/cpptrn/qt/6.9.3/msvc2022_64")
+list(PREPEND CMAKE_PREFIX_PATH "${GPT_DEPS_ROOT}/qt/6.9.3/msvc2022_64")
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
-set(SP_ROOT   "E:/project/cpp分词器/sentencepiece-0.2.2")
-set(SP_BUILD  "E:/cpptrn/sp")
-set(ZLIB_ROOT "E:/cpptrn/zlib")
+set(SP_ROOT   "${CMAKE_CURRENT_SOURCE_DIR}/../cpp分词器/sentencepiece-0.2.2")
+set(SP_BUILD  "${GPT_DEPS_ROOT}/sp")
+set(ZLIB_ROOT "${GPT_DEPS_ROOT}/zlib")
 
 # 生成项目根路径头文件（UTF-8，避免命令行转义问题）
 file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" _root_native)
@@ -45,10 +52,18 @@ add_executable(gpt_trainer WIN32
   src/tokenizer_worker.h src/tokenizer_worker.cpp
   src/train.h      src/train.cpp
   src/tfevents.h   src/tfevents.cpp
+  src/ui_theme.h   src/ui_theme.cpp
+  src/ui_kit.h     src/ui_kit.cpp
+  src/gguf_writer.h src/gguf_writer.cpp
+  src/llama_engine.h src/llama_engine.cpp
+  src/llama_prompt.h src/llama_prompt.cpp
+  src/cli.h        src/cli.cpp
+  src/cli_chat.cpp
+  src/cli_main.cpp
   src/gui.h        src/gui.cpp
 )
 
-target_compile_definitions(gpt_trainer PRIVATE NOMINMAX _USE_MATH_DEFINES)
+target_compile_definitions(gpt_trainer PRIVATE NOMINMAX _USE_MATH_DEFINES UNICODE _UNICODE)
 target_include_directories(gpt_trainer PRIVATE
   "${CMAKE_BINARY_DIR}/gen"
   "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -57,6 +72,9 @@ target_include_directories(gpt_trainer PRIVATE
   "${ZLIB_ROOT}"
 )
 target_compile_options(gpt_trainer PRIVATE /utf-8 /W3 /EHsc /bigobj /Zc:__cplusplus)
+
+# Win11 系统级 UI: dwmapi / uxtheme 用于标题栏、圆角、系统强调色
+target_link_libraries(gpt_trainer PRIVATE dwmapi uxtheme user32 gdi32 shell32 winhttp)
 
 # sentencepiece 静态库 + 其依赖的 abseil 静态库
 file(GLOB ABSL_LIBS "${SP_BUILD}/third_party/abseil-cpp/absl/*/Release/*.lib")
